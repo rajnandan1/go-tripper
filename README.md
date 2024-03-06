@@ -1,4 +1,4 @@
-# Package tripper
+# go-tripper
 
 [![Coverage Status](https://coveralls.io/repos/github/rajnandan1/go-tripper/badge.svg?branch=main)](https://coveralls.io/github/rajnandan1/go-tripper?branch=main)
 
