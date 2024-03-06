@@ -1,27 +1,30 @@
-name: Run Tests
-
-on:
-  push:
-    branches: [ "main" ]
-  pull_request:
-    branches: [ "main" ]
-
+name: Quality
+on: [push, pull_request]
 jobs:
-  build:
+  test:
+    name: Test with Coverage
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-
-      - name: Set up Go
-        uses: actions/setup-go@v3
-        with:
-          go-version: '1.20.5'
-
-      - name: Test
-        run: go mod tidy && go test -race -covermode atomic -coverprofile=covprofile ./...
-      - name: Install goveralls
-        run: go install github.com/mattn/goveralls@latest
-      - name: Send coverage
-        env:
-          COVERALLS_TOKEN: ${{ secrets.TOKEN_GITHUB }}
-        run: goveralls -coverprofile=covprofile
+    - name: Set up Go
+      uses: actions/setup-go@v2
+      with:
+        go-version: '1.16'
+    - name: Check out code
+      uses: actions/checkout@v2
+    - name: Install dependencies
+      run: |
+        go mod download
+    - name: Run Unit tests
+      run: |
+        go test -race -covermode atomic -coverprofile=covprofile ./...
+    - name: Install goveralls
+      run: go install github.com/mattn/goveralls@latest
+    - name: Send coverage
+      env:
+        COVERALLS_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      run: goveralls -coverprofile=covprofile -service=github
+    # or use shogo82148/actions-goveralls
+    # - name: Send coverage
+    #   uses: shogo82148/actions-goveralls@v1
+    #   with:
+    #     path-to-profile: covprofile
