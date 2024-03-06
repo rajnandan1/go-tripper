@@ -1,5 +1,8 @@
 # go-tripper
 
+![Tripper](https://github.com/rajnandan1/go-tripper/assets/16224367/ba0b329c-6aa7-4d5f-aa35-4f7d28e9e3bf)
+
+
 [![Coverage Status](https://coveralls.io/repos/github/rajnandan1/go-tripper/badge.svg?branch=main)](https://coveralls.io/github/rajnandan1/go-tripper?branch=main)
 
 The `tripper` is a lightweight, 0 dependencies package that provides functionality for monitoring the status of a circuit. It allows you to track the success and failure counts of events and determine if a circuit should be open or closed based on configurable thresholds. This can be useful in scenarios where you want to implement circuit breaker patterns or manage the availability of services.
