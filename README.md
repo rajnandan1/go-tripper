@@ -178,7 +178,7 @@ import (
     "net/http"
     "time"
 
-    "github.com/your-username/tripper"
+    "github.com/rajnandan1/go-tripper"
 )
 
 func main() {
