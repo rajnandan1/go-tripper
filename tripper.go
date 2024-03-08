@@ -15,33 +15,16 @@ const (
 
 var thresholdTypes = []string{ThresholdCount, ThresholdPercentage}
 
-// Monitor represents a monitoring entity that tracks the status of a circuit.
-type Monitor interface {
-	Get() *MonitorImplementation
+// Circuit represents a monitoring entity that tracks the status of a circuit.
+type Circuit interface {
 	UpdateStatus(success bool)
 	IsCircuitOpen() bool
+	Data() CircuitData
 }
 
-// TripperOptions represents options for configuring the Tripper.
-type TripperOptions struct {
-}
-
-// TripperImplementation represents the implementation of the Tripper interface.
-type TripperImplementation struct {
-	Circuits map[string]Monitor
-	Options  TripperOptions
-}
-
-// Tripper represents a circuit breaker tripper.
-type Tripper interface {
-	AddMonitor(monitorOptions MonitorOptions) (Monitor, error)
-	GetMonitor(name string) (Monitor, error)
-	GetAllMonitors() map[string]Monitor
-}
-
-// MonitorOptions represents options for configuring a Monitor.
-type MonitorOptions struct {
-	Name              string  // Name of the monitor
+// CircuitOptions represents options for configuring a Circuit.
+type CircuitOptions struct {
+	Name              string  // Name of the circuit
 	Threshold         float32 // Threshold value for triggering circuit open
 	ThresholdType     string  // Type of threshold (e.g., percentage, count)
 	MinimumCount      int64   // Minimum number of events required for monitoring
@@ -49,10 +32,16 @@ type MonitorOptions struct {
 	OnCircuitOpen     func(t CallbackEvent)
 	OnCircuitClosed   func(t CallbackEvent)
 }
+type CircuitData struct {
+	SuccessCount       int64
+	FailureCount       int64
+	IsCircuitOpen      bool
+	CircuitOpenedSince int64
+}
 
-// MonitorImplementation represents the implementation of the Monitor interface.
-type MonitorImplementation struct {
-	Options            MonitorOptions
+// CircuitImplementation represents the implementation of the Circuit interface.
+type CircuitImplementation struct {
+	Options            CircuitOptions
 	FailureCount       int64 // Number of failures recorded
 	SuccessCount       int64 // Number of successes recorded
 	CircuitOpen        bool  // Indicates whether the circuit is open or closed
@@ -60,42 +49,27 @@ type MonitorImplementation struct {
 	CircuitOpenedSince int64 // Timestamp when the circuit was opened
 	Ticker             *time.Ticker
 	Mutex              sync.Mutex
+	XMutex             sync.Mutex
 }
 
-// CallbackEvent represents an event callback for the circuit monitor.
+// CallbackEvent represents an event callback for the circuit.
 type CallbackEvent struct {
 	Timestamp    int64
 	SuccessCount int64
 	FailureCount int64
 }
 
-// Configure configures the Tripper with the provided options.
-func Configure(p TripperOptions) Tripper {
-	return &TripperImplementation{
-		Options:  p,
-		Circuits: make(map[string]Monitor),
+func (m *CircuitImplementation) Data() CircuitData {
+	return CircuitData{
+		SuccessCount:       m.SuccessCount,
+		FailureCount:       m.FailureCount,
+		IsCircuitOpen:      m.CircuitOpen,
+		CircuitOpenedSince: m.CircuitOpenedSince,
 	}
 }
 
-// ConfigureNewMonitor creates and configures a new Monitor with the provided options.
-func ConfigureNewMonitor(p MonitorOptions) Monitor {
-	return &MonitorImplementation{
-		Options: p,
-	}
-}
-
-// Get returns the MonitorImplementation.
-func (t *MonitorImplementation) Get() *MonitorImplementation {
-	return t
-}
-
-// AddMonitor adds a new Monitor with the provided options.
-func (t *TripperImplementation) AddMonitor(monitorOptions MonitorOptions) (Monitor, error) {
-	if _, ok := t.Circuits[monitorOptions.Name]; ok {
-		return nil, fmt.Errorf("Monitor with name %s already exists", monitorOptions.Name)
-	}
-
-	// check if the threshold type is valid
+// ConfigureCircuit creates and configures a new Circuit with the provided options.
+func ConfigureCircuit(monitorOptions CircuitOptions) (Circuit, error) {
 	validThresholdType := false
 	for _, thType := range thresholdTypes {
 		if thType == monitorOptions.ThresholdType {
@@ -125,64 +99,41 @@ func (t *TripperImplementation) AddMonitor(monitorOptions MonitorOptions) (Monit
 		return nil, fmt.Errorf("minimum count should be greater than threshold")
 	}
 
-	// if the interval is less than 60, return an error
-	if monitorOptions.IntervalInSeconds < 60 {
+	// if the interval is less than 5, return an error
+	if monitorOptions.IntervalInSeconds < 5 {
 		return nil, fmt.Errorf("invalid interval %d", monitorOptions.IntervalInSeconds)
 	}
 
-	// if the interval is not a multiple of 60, return an error
-	if monitorOptions.IntervalInSeconds%60 != 0 {
-		return nil, fmt.Errorf("invalid interval %d", monitorOptions.IntervalInSeconds)
+	newMonitor := &CircuitImplementation{
+		Options: monitorOptions,
 	}
+	newMonitor.Ticker = time.NewTicker(time.Duration(monitorOptions.IntervalInSeconds) * time.Second)
+	go func() {
 
-	// configure the monitor
-	m := ConfigureNewMonitor(MonitorOptions{
-		Name:              monitorOptions.Name,
-		Threshold:         monitorOptions.Threshold,
-		ThresholdType:     monitorOptions.ThresholdType,
-		MinimumCount:      monitorOptions.MinimumCount,
-		IntervalInSeconds: monitorOptions.IntervalInSeconds,
-		OnCircuitOpen:     monitorOptions.OnCircuitOpen,
-		OnCircuitClosed:   monitorOptions.OnCircuitClosed,
-	})
+		for range newMonitor.Ticker.C {
 
-	//start ticker
+			newMonitor.SuccessCount = 0
+			newMonitor.FailureCount = 0
+			newMonitor.CircuitOpenedSince = 0
+			newMonitor.CircuitOpen = false
+			if newMonitor.Options.OnCircuitClosed != nil {
+				newMonitor.Options.OnCircuitClosed(CallbackEvent{
+					Timestamp:    getTimestamp(),
+					SuccessCount: newMonitor.SuccessCount,
+					FailureCount: newMonitor.FailureCount,
+				})
+			}
+		}
+	}()
+	return newMonitor, nil
 
-	t.Circuits[monitorOptions.Name] = m
-	return m, nil
 }
 
-// GetMonitor returns the Monitor with the provided name.
-func (t *TripperImplementation) GetMonitor(name string) (Monitor, error) {
-	monitor, ok := t.Circuits[name]
-	if !ok {
-		return nil, fmt.Errorf("Monitor with name %s does not exist", name)
-	}
-	return monitor, nil
-}
-
-// UpdateStatus updates the status of the Monitor based on the success of the event.
-func (m *MonitorImplementation) UpdateStatus(success bool) {
+// UpdateStatus updates the status of the Circuit based on the success of the event.
+func (m *CircuitImplementation) UpdateStatus(success bool) {
 	//add a lock here
 	m.Mutex.Lock()
 	defer m.Mutex.Unlock()
-
-	if m.Ticker == nil {
-		m.Ticker = time.NewTicker(time.Duration(m.Options.IntervalInSeconds) * time.Second)
-		go func() {
-			for range m.Ticker.C {
-				m.SuccessCount = 0
-				m.FailureCount = 0
-				m.CircuitOpenedSince = 0
-				m.CircuitOpen = false
-				m.Options.OnCircuitClosed(CallbackEvent{
-					Timestamp:    getTimestamp(),
-					SuccessCount: m.SuccessCount,
-					FailureCount: m.FailureCount,
-				})
-			}
-		}()
-	}
 
 	m.LastCapturedAt = getTimestamp()
 	if success {
@@ -193,6 +144,9 @@ func (m *MonitorImplementation) UpdateStatus(success bool) {
 	if m.SuccessCount+m.FailureCount < m.Options.MinimumCount {
 		return
 	}
+
+	currentStateOfCircuit := m.CircuitOpen
+
 	if m.Options.ThresholdType == ThresholdCount {
 		if float32(m.FailureCount) >= m.Options.Threshold {
 			m.CircuitOpen = true
@@ -211,9 +165,10 @@ func (m *MonitorImplementation) UpdateStatus(success bool) {
 		} else {
 			m.CircuitOpen = false
 			m.CircuitOpenedSince = 0
+
 		}
 	}
-	if m.CircuitOpen {
+	if currentStateOfCircuit != m.CircuitOpen && m.CircuitOpen {
 
 		if m.Options.OnCircuitOpen != nil {
 
@@ -224,7 +179,7 @@ func (m *MonitorImplementation) UpdateStatus(success bool) {
 			})
 		}
 
-	} else {
+	} else if currentStateOfCircuit != m.CircuitOpen && !m.CircuitOpen {
 		if m.Options.OnCircuitClosed != nil {
 			m.Options.OnCircuitClosed(CallbackEvent{
 				Timestamp:    m.LastCapturedAt,
@@ -232,18 +187,14 @@ func (m *MonitorImplementation) UpdateStatus(success bool) {
 				FailureCount: m.FailureCount,
 			})
 		}
+
 	}
 
 }
 
 // IsCircuitOpen returns true if the circuit is open, false otherwise.
-func (m *MonitorImplementation) IsCircuitOpen() bool {
+func (m *CircuitImplementation) IsCircuitOpen() bool {
 	return m.CircuitOpen
-}
-
-// GetAllMonitors returns all the monitors in the Tripper.
-func (t *TripperImplementation) GetAllMonitors() map[string]Monitor {
-	return t.Circuits
 }
 
 // getTimestamp returns the current timestamp in Unix format.

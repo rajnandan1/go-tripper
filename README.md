@@ -1,11 +1,11 @@
  
 # Tripper
 
-Tripper is a circuit breaker package for Go that allows you to monitor and control the status of circuits.
+Tripper is a circuit breaker package for Go that allows you to circuit and control the status of circuits.
 
 ![Tripper](https://github.com/rajnandan1/go-tripper/assets/16224367/ba0b329c-6aa7-4d5f-aa35-4f7d28e9e3bf)
 
-[![Coverage Status](https://coveralls.io/repos/github/rajnandan1/go-tripper/badge.svg?branch=main)](https://coveralls.io/github/rajnandan1/go-tripper?branch=main)
+[![Coverage Status](https://coveralls.io/repos/github/rajnandan1/go-tripper/badge.svg?branch=main)](https://coveralls.io/github/rajnandan1/go-tripper?branch=main) [![Go Reference](https://pkg.go.dev/badge/github.com/rajnandan1/go-tripper.svg)](https://pkg.go.dev/github.com/rajnandan1/go-tripper)
 
 ## Installation
 
@@ -23,23 +23,17 @@ Import the Tripper package in your Go code:
 import "github.com/rajnandan1/go-tripper"
 ```
 
-### Creating a Tripper
 
-To create a Tripper instance, use the `Configure` function:
 
+### Adding a Circuit
+
+To add a circuit to the Tripper, use the `ConfigureCircuit` function:
+#### Circuit With Count
 ```go
-tripper := tripper.Configure(tripper.TripperOptions{})
-```
-
-### Adding a Monitor
-
-To add a monitor to the Tripper, use the `AddMonitor` function:
-#### Monitor With Count
-```go
-//Adding a monitor that will trip the circuit if count of failure is more than 10 in 1 minute
+//Adding a circuit that will trip the circuit if count of failure is more than 10 in 1 minute
 //for a minimum of 100 count
-monitorOptions := tripper.MonitorOptions{
-    Name:              "example-monitor",
+circuitOptions := tripper.CircuitOptions{
+    Name:              "example-circuit",
     Threshold:         10,
     ThresholdType:     tripper.ThresholdCount,
     MinimumCount:      100,
@@ -48,19 +42,19 @@ monitorOptions := tripper.MonitorOptions{
     OnCircuitClosed:   onCircuitClosedCallback,
 }
 
-monitor, err := tripper.AddMonitor(monitorOptions)
+circuit, err := tripper.ConfigureCircuit(circuitOptions)
 if err != nil {
-    fmt.Println("Failed to add monitor:", err)
+    fmt.Println("Failed to add circuit:", err)
     return
 }
 ```
 
-#### Monitor With Percentage
+#### Circuit With Percentage
 ```go
-//Adding a monitor that will trip the circuit if count of failure is more than 10% in 1 minute
+//Adding a circuit that will trip the circuit if count of failure is more than 10% in 1 minute
 //for a minimum of 100 count
-monitorOptions := tripper.MonitorOptions{
-    Name:              "example-monitor",
+circuitOptions := tripper.CircuitOptions{
+    Name:              "example-circuit",
     Threshold:         10,
     ThresholdType:     tripper.ThresholdCount,
     MinimumCount:      100,
@@ -69,13 +63,13 @@ monitorOptions := tripper.MonitorOptions{
     OnCircuitClosed:   onCircuitClosedCallback,
 }
 
-monitor, err := tripper.AddMonitor(monitorOptions)
+circuit, err := tripper.ConfigureCircuit(circuitOptions)
 if err != nil {
-    fmt.Println("Failed to add monitor:", err)
+    fmt.Println("Failed to add circuit:", err)
     return
 }
 ```
-#### Monitor with Callbacks
+#### Circuit with Callbacks
 ```go
 func onCircuitOpenCallback(x tripper.CallbackEvent){
     fmt.Println("Callback OPEN")
@@ -89,8 +83,8 @@ func onCircuitClosedCallback(x tripper.CallbackEvent){
 	fmt.Println(x.SuccessCount)
 	fmt.Println(x.Timestamp)
 }
-monitorOptions := tripper.MonitorOptions{
-    Name:              "example-monitor",
+circuitOptions := tripper.CircuitOptions{
+    Name:              "example-circuit",
     Threshold:         10,
     ThresholdType:     tripper.ThresholdCount,
     MinimumCount:      100,
@@ -99,19 +93,19 @@ monitorOptions := tripper.MonitorOptions{
     OnCircuitClosed:   onCircuitClosedCallback,
 }
 
-monitor, err := tripper.AddMonitor(monitorOptions)
+circuit, err := tripper.ConfigureCircuit(circuitOptions)
 if err != nil {
-    fmt.Println("Failed to add monitor:", err)
+    fmt.Println("Failed to add circuit:", err)
     return
 }
 ```
-### Monitor Options
+### Circuit Options
 
 | Option              | Description                                                  | Required | Type       |
 |---------------------|--------------------------------------------------------------|----------|------------|
-| `Name`              | The name of the monitor.                                     | Required | `string`   |
-| `Threshold`         | The threshold value for the monitor.                          | Required | `float32` |
-| `ThresholdType`     | The type of threshold (`ThresholdCount` or `ThresholdRatio`). | Required | `string`  |
+| `Name`              | The name of the circuit.                                     | Required | `string`   |
+| `Threshold`         | The threshold value for the circuit.                          | Required | `float32` |
+| `ThresholdType`     | The type of threshold (`ThresholdCount` or `ThresholdPercentage`). | Required | `string`  |
 | `MinimumCount`      | The minimum number of events required for monitoring.         | Required | `int64`   |
 | `IntervalInSeconds` | The time interval for monitoring in seconds.                  | Required | `int`     |
 | `OnCircuitOpen`     | Callback function called when the circuit opens.              | Optional | `func()`  |
@@ -119,25 +113,13 @@ if err != nil {
 
 Circuits are reset after `IntervalInSeconds`
 
-### Getting a Monitor
+### Updating Circuit Status
 
-To get a monitor from the Tripper, use the `GetMonitor` function:
-
-```go
-monitor, err := tripper.GetMonitor("example-monitor")
-if err != nil {
-    fmt.Println("Monitor not found:", err)
-    return
-}
-```
-
-### Updating Monitor Status
-
-To update the status of a monitor based on the success of an event, use the `UpdateStatus` function:
+To update the status of a circuit based on the success of an event, use the `UpdateStatus` function:
 
 ```go
-monitor.UpdateStatus(true)  // Success event
-monitor.UpdateStatus(false) // Failure event
+circuit.UpdateStatus(true)  // Success event
+circuit.UpdateStatus(false) // Failure event
 ```
 
 ### Checking Circuit Status
@@ -145,83 +127,65 @@ monitor.UpdateStatus(false) // Failure event
 To check if a circuit is open or closed, use the `IsCircuitOpen` function:
 
 ```go
-isOpen := monitor.IsCircuitOpen()
+isOpen := circuit.IsCircuitOpen()
 if isOpen {
     fmt.Println("Circuit is open")
 } else {
     fmt.Println("Circuit is closed")
 }
 ```
-
-### Getting All Monitors
-
-To get all monitors in the Tripper, use the `GetAllMonitors` function:
-
-```go
-monitors := tripper.GetAllMonitors()
-for name, monitor := range monitors {
-    fmt.Println("Monitor:", name)
-    fmt.Println("Circuit Open:", monitor.IsCircuitOpen())
-    fmt.Println("Success Count:", monitor.Get().SuccessCount)
-    fmt.Println("Failure Count:", monitor.Get().FailureCount)
-    fmt.Println()
-}
-```
+ 
 
 ### Example: HTTP Request with Circuit Breaker
 
 Here's an example of using Tripper to handle HTTP requests with a circuit breaker:
 
 ```go
+package main
+
 import (
     "fmt"
-    "net/http"
     "time"
 
     "github.com/rajnandan1/go-tripper"
 )
 
 func main() {
-    // Create a Tripper instance
-    tripper := tripper.Configure(tripper.TripperOptions{})
-
-    // Add a monitor for the HTTP request circuit
-    monitorOptions := tripper.MonitorOptions{
-        Name:              "http-request-monitor",
-        Threshold:         10,
-        ThresholdType:     tripper.ThresholdCount,
-        MinimumCount:      100,
-        IntervalInSeconds: 60,
-        OnCircuitOpen: func(t tripper.CallbackEvent) {
-            fmt.Println("Circuit is open for HTTP requests. Triggered at:", time.Unix(t.Timestamp, 0))
+    // Configure the circuit options
+    circuitOptions := tripper.CircuitOptions{
+        Name:              "MyServiceMonitor",
+        Threshold:         50, // Threshold for triggering circuit open (percentage)
+        ThresholdType:     tripper.ThresholdPercentage,
+        MinimumCount:      10,  // Minimum number of events required for monitoring
+        IntervalInSeconds: 60,  // Interval in seconds for monitoring
+        OnCircuitOpen: func(event tripper.CallbackEvent) {
+            fmt.Println("Circuit opened:", event)
         },
-        OnCircuitClosed: func(t tripper.CallbackEvent) {
-            fmt.Println("Circuit is closed for HTTP requests. Triggered at:", time.Unix(t.Timestamp, 0))
+        OnCircuitClosed: func(event tripper.CallbackEvent) {
+            fmt.Println("Circuit closed:", event)
         },
     }
 
-    _, err := tripper.AddMonitor(monitorOptions)
+    // Create a new circuit
+    circuit, err := tripper.ConfigureCircuit(circuitOptions)
     if err != nil {
-        fmt.Println("Failed to add monitor:", err)
+        fmt.Println("Error creating circuit:", err)
         return
     }
 
-    // Make an HTTP request with circuit breaker protection
-    client := http.Client{
-        Transport: tripper.NewTransport(http.DefaultTransport),
+    // Simulate calling a service
+    for i := 0; i < 20; i++ {
+        success := i%2 == 0 // Simulate failures every other call
+        circuit.UpdateStatus(success)
+        time.Sleep(time.Second)
     }
 
-    resp, err := client.Get("https://api.example.com/data")
-    if err != nil {
-        fmt.Println("HTTP request failed:", err)
-        return
+    // Check if the circuit is open
+    if circuit.IsCircuitOpen() {
+        fmt.Println("Circuit is open!")
+    } else {
+        fmt.Println("Circuit is closed.")
     }
-    defer resp.Body.Close()
-
-    // Process the response
-    // ...
-
-    fmt.Println("HTTP request successful!")
 }
 ```
 
