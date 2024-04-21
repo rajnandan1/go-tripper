@@ -9,11 +9,12 @@ import (
 // threshold type can be only COUNT or PERCENTAGE
 // ThresholdCount represents a threshold type based on count.
 const (
-	ThresholdCount      = "COUNT"
-	ThresholdPercentage = "PERCENTAGE"
+	ThresholdCount       = "COUNT"
+	ThresholdPercentage  = "PERCENTAGE"
+	ThresholdConsecutive = "CONSECUTIVE"
 )
 
-var thresholdTypes = []string{ThresholdCount, ThresholdPercentage}
+var thresholdTypes = []string{ThresholdCount, ThresholdPercentage, ThresholdConsecutive}
 
 // Circuit represents a monitoring entity that tracks the status of a circuit.
 type Circuit interface {
@@ -47,6 +48,7 @@ type CircuitImplementation struct {
 	CircuitOpen        bool  // Indicates whether the circuit is open or closed
 	LastCapturedAt     int64 // Timestamp of the last captured event
 	CircuitOpenedSince int64 // Timestamp when the circuit was opened
+	ConsecutiveCounter int64
 	Ticker             *time.Ticker
 	Mutex              sync.Mutex
 	XMutex             sync.Mutex
@@ -105,7 +107,8 @@ func ConfigureCircuit(monitorOptions CircuitOptions) (Circuit, error) {
 	}
 
 	newMonitor := &CircuitImplementation{
-		Options: monitorOptions,
+		Options:            monitorOptions,
+		ConsecutiveCounter: 0,
 	}
 	newMonitor.Ticker = time.NewTicker(time.Duration(monitorOptions.IntervalInSeconds) * time.Second)
 	go func() {
@@ -115,6 +118,7 @@ func ConfigureCircuit(monitorOptions CircuitOptions) (Circuit, error) {
 			newMonitor.SuccessCount = 0
 			newMonitor.FailureCount = 0
 			newMonitor.CircuitOpenedSince = 0
+			newMonitor.ConsecutiveCounter = 0
 			newMonitor.CircuitOpen = false
 			if newMonitor.Options.OnCircuitClosed != nil {
 				newMonitor.Options.OnCircuitClosed(CallbackEvent{
@@ -137,8 +141,10 @@ func (m *CircuitImplementation) UpdateStatus(success bool) {
 
 	m.LastCapturedAt = getTimestamp()
 	if success {
+		m.ConsecutiveCounter = 0
 		m.SuccessCount++
 	} else {
+		m.ConsecutiveCounter++
 		m.FailureCount++
 	}
 	if m.SuccessCount+m.FailureCount < m.Options.MinimumCount {
@@ -155,7 +161,7 @@ func (m *CircuitImplementation) UpdateStatus(success bool) {
 			m.CircuitOpen = false
 			m.CircuitOpenedSince = 0
 		}
-	} else {
+	} else if m.Options.ThresholdType == ThresholdPercentage {
 		// if the threshold type is percentage, check if the percentage of failures is greater than the threshold
 		totalRequests := m.FailureCount + m.SuccessCount
 		failurePercentage := (m.FailureCount * 100) / totalRequests
@@ -167,6 +173,15 @@ func (m *CircuitImplementation) UpdateStatus(success bool) {
 			m.CircuitOpenedSince = 0
 
 		}
+	} else if m.Options.ThresholdType == ThresholdConsecutive {
+		if m.ConsecutiveCounter >= int64(m.Options.Threshold) {
+			m.CircuitOpen = true
+			m.CircuitOpenedSince = m.LastCapturedAt
+		} else {
+			m.CircuitOpen = false
+			m.CircuitOpenedSince = 0
+		}
+
 	}
 	if currentStateOfCircuit != m.CircuitOpen && m.CircuitOpen {
 
