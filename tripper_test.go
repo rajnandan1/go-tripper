@@ -121,7 +121,7 @@ func TestUpdateStatus(t *testing.T) {
 	assert.False(t, m.Data().IsCircuitOpen)
 
 	// Test case 4: Update status with success=false and minimum count not reached
-	// Expected output: Failure count incremented, circuit not opened
+	// Expected output: Failure count incremented, circuit opened
 	m.UpdateStatus(false)
 	assert.Equal(t, int64(2), m.Data().SuccessCount)
 	assert.Equal(t, int64(2), m.Data().FailureCount)
@@ -364,4 +364,32 @@ func TestIsCircuitOpen(t *testing.T) {
 	m.UpdateStatus(true)
 	m.UpdateStatus(true)
 	assert.False(t, m.IsCircuitOpen())
+}
+func TestUpdateStatusConsecutive(t *testing.T) {
+	monitorOptions := CircuitOptions{
+		Name:              "TEST_ThresholdConsecutive",
+		Threshold:         5,
+		MinimumCount:      2,
+		IntervalInSeconds: 120,
+		ThresholdType:     ThresholdConsecutive,
+	}
+	m, err := ConfigureCircuit(monitorOptions)
+	assert.NoError(t, err)
+	m.UpdateStatus(false)
+	m.UpdateStatus(false)
+	m.UpdateStatus(false)
+	m.UpdateStatus(false)
+	m.UpdateStatus(false)
+	assert.True(t, m.IsCircuitOpen())
+	m.UpdateStatus(false)
+	m.UpdateStatus(false)
+	m.UpdateStatus(true)
+	assert.False(t, m.IsCircuitOpen())
+	m.UpdateStatus(false)
+	m.UpdateStatus(false)
+	m.UpdateStatus(false)
+	m.UpdateStatus(false)
+	m.UpdateStatus(false)
+	assert.True(t, m.IsCircuitOpen())
+
 }

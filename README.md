@@ -56,7 +56,7 @@ if err != nil {
 circuitOptions := tripper.CircuitOptions{
     Name:              "example-circuit",
     Threshold:         10,
-    ThresholdType:     tripper.ThresholdCount,
+    ThresholdType:     tripper.ThresholdPercentage,
     MinimumCount:      100,
     IntervalInSeconds: 60,
     OnCircuitOpen:     onCircuitOpenCallback,
@@ -69,6 +69,28 @@ if err != nil {
     return
 }
 ```
+
+#### Circuit With Consecutive Errors
+```go
+//Adding a circuit that will trip the circuit if 10 consecutive erros occur in 1 minute
+//for a minimum of 100 count
+circuitOptions := tripper.CircuitOptions{
+    Name:              "example-circuit",
+    Threshold:         10,
+    ThresholdType:     tripper.ThresholdConsecutive,
+    MinimumCount:      100,
+    IntervalInSeconds: 60,
+    OnCircuitOpen:     onCircuitOpenCallback,
+    OnCircuitClosed:   onCircuitClosedCallback,
+}
+
+circuit, err := tripper.ConfigureCircuit(circuitOptions)
+if err != nil {
+    fmt.Println("Failed to add circuit:", err)
+    return
+}
+```
+
 #### Circuit with Callbacks
 ```go
 func onCircuitOpenCallback(x tripper.CallbackEvent){
@@ -105,7 +127,7 @@ if err != nil {
 |---------------------|--------------------------------------------------------------|----------|------------|
 | `Name`              | The name of the circuit.                                     | Required | `string`   |
 | `Threshold`         | The threshold value for the circuit.                          | Required | `float32` |
-| `ThresholdType`     | The type of threshold (`ThresholdCount` or `ThresholdPercentage`). | Required | `string`  |
+| `ThresholdType`     | The type of threshold (`ThresholdCount` or `ThresholdPercentage`or `ThresholdConsecutive`). | Required | `string`  |
 | `MinimumCount`      | The minimum number of events required for monitoring.         | Required | `int64`   |
 | `IntervalInSeconds` | The time interval for monitoring in seconds.                  | Required | `int`     |
 | `OnCircuitOpen`     | Callback function called when the circuit opens.              | Optional | `func()`  |
