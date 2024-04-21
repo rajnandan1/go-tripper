@@ -28,7 +28,9 @@ import "github.com/rajnandan1/go-tripper"
 ### Adding a Circuit
 
 To add a circuit to the Tripper, use the `ConfigureCircuit` function:
+
 #### Circuit With Count
+
 ```go
 //Adding a circuit that will trip the circuit if count of failure is more than 10 in 1 minute
 //for a minimum of 100 count
